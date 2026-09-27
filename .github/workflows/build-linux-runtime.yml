@@ -1,0 +1,46 @@
+name: Build Linux Ares Runtime
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-linux-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download pinned Ares v148 AppImage
+        run: |
+          set -euxo pipefail
+          URL='https://github.com/pkgforge-dev/ares-emu-appimage/releases/download/v148%402026-09-07_1788787887/ares-v148-anylinux-x86_64.AppImage'
+          curl -L --fail --retry 3 -o ares.AppImage "$URL"
+          echo 'ffb281c5b99ab3bdb4e3deb0d094aceb2e95a1e83e81d75ab1cf9caf6f3d59df  ares.AppImage' | sha256sum -c -
+          chmod +x ares.AppImage
+
+      - name: Extract runtime without FUSE
+        run: |
+          set -euxo pipefail
+          ./ares.AppImage --appimage-extract >/dev/null
+          test -d squashfs-root
+          test -x squashfs-root/AppRun
+          find squashfs-root -maxdepth 4 -type f | sort | sed -n '1,200p'
+
+      - name: Package extracted runtime
+        run: |
+          set -euxo pipefail
+          tar -C squashfs-root -czf ares-v148-linux-runtime.tar.gz .
+          sha256sum ares-v148-linux-runtime.tar.gz > ares-v148-linux-runtime.tar.gz.sha256
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ares-v148-linux-runtime
+          path: |
+            ares-v148-linux-runtime.tar.gz
+            ares-v148-linux-runtime.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
